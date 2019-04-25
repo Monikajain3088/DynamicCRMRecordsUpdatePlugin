@@ -38,8 +38,48 @@ namespace UpdateAccount
                 {
                     try
                     {
-                        // Get All existing Accounts
-                        string _ExistingAccount = @"<fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='false'>
+                        // get the Account latest number from counter entity record
+                        Entity CounterEntity = GetLatestAccountNumber(service);
+                        int sequenceNumber = (int)CounterEntity["rel_sequencenumber"];
+                        int incrementVal = (int)CounterEntity["rel_increment"];
+                        if (sequenceNumber == 0)
+                        {
+                            int totAccount = GetTotalAccountCount(service);
+                            tracingService.Trace("accountPlugin: {0}", totAccount.ToString());
+                            entity.Attributes["rel_totalaccounts"] = totAccount + incrementVal; // assign value in total account counts 
+                            CounterEntity["rel_sequencenumber"] = totAccount + incrementVal;
+                            tracingService.Trace("Account number updated when sequence is 0");
+                        }
+                        else
+                        {
+                            tracingService.Trace("accountPlugin: {0}", sequenceNumber.ToString());
+                            entity.Attributes["rel_totalaccounts"] = sequenceNumber + incrementVal;
+                            CounterEntity["rel_sequencenumber"] = sequenceNumber + incrementVal; ;
+                            tracingService.Trace("Account number updated when sequence is greater than 0");
+                        }
+                        service.Update(CounterEntity);
+
+                    }
+                    catch (Exception ex)
+                    {
+                        tracingService.Trace("Plugin Exception: " + ex);
+                        throw new InvalidPluginExecutionException(ex.ToString());
+                    }
+                }
+                else
+                    return;
+            }
+
+        }
+        /// <summary>
+        /// Get Total Account records
+        /// </summary>
+        /// <param name="service"></param>
+        /// <returns>Total count of existing account</returns>
+        private int GetTotalAccountCount(IOrganizationService service)
+        {
+            // Get All existing Accounts
+            string _ExistingAccount = @"<fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='false'>
                                               <entity name='account'>
                                                 <attribute name='name' />
                                                 <attribute name='accountid' />
@@ -48,30 +88,34 @@ namespace UpdateAccount
                                               </entity>
                                             </fetch>";
 
-                        EntityCollection totExistingAccountCol = (EntityCollection)service.RetrieveMultiple(new FetchExpression(_ExistingAccount));
-                        int totAccount = totExistingAccountCol.Entities.Count; // get existing account count
-                        tracingService.Trace("accountPlugin: {0}", totAccount.ToString());
-                        entity.Attributes["rel_totalaccounts"] = totAccount + Constant.increasedVal; // assign value in total account counts 
-                        tracingService.Trace("Account Counts written");
+            EntityCollection totExistingAccountCol = (EntityCollection)service.RetrieveMultiple(new FetchExpression(_ExistingAccount));
+            int totAccount = totExistingAccountCol.Entities.Count; // get existing account count
+            return totAccount;
+        }
 
+        /// <summary>
+        /// get the lastest account number from Counter entity 
+        /// </summary>
+        /// <param name="organizationService"></param>
+        /// <returns>Counter entity</returns>
+        private Entity GetLatestAccountNumber(IOrganizationService organizationService)
+        {
+            string _lastnumberStr = @"<fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='false'>
+                                      <entity name='rel_counter'>
+                                        <attribute name='rel_counterid' />
+                                        <attribute name='rel_name' />
+                                        <attribute name='rel_sequencenumber' />
+                                        <attribute name='rel_increment' />
+                                        <order attribute='rel_name' descending='false' />
+                                       <filter type='and'>
+                                       <condition attribute='rel_name' operator='eq' value='Account' />
+                                       </filter>
+                                      </entity>
+                                    </fetch>";
 
-                    }
-                    catch (Exception e)
-                    {
-
-                        tracingService.Trace("accountPlugin: {0}", e.ToString());
-                        throw;
-
-
-
-                    }
-                }
-                else
-                    return;
-
-            }
-
-
+            EntityCollection AccountCounterCol = (EntityCollection)organizationService.RetrieveMultiple(new FetchExpression(_lastnumberStr));
+            Entity counterAccount = AccountCounterCol[0];
+            return counterAccount;
         }
     }
 }
